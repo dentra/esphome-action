@@ -1,0 +1,98 @@
+name: esphome
+description: Compile with ESPHome
+inputs:
+  version:
+    description: ESPHome version
+    required: false
+    default: 'latest'
+  config:
+    description: ESPHome configuration file
+    required: true
+  substitutions:
+    description: ESPHome substitution variables as json object string
+    required: false
+    default: '{}'
+  configure:
+    description: Run configure when true or compile
+    required: false
+    default: "false"
+  python-version:
+    description: Python version
+    required: true
+outputs:
+  firmware-path:
+    description: Path where firmware located
+    value: ${{ steps.process.outputs.path }}
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare environment for ESPHome ${{ inputs.version }}
+      id: esphome
+      env:
+        ESPHOME_VERSION: ${{ inputs.version }}
+      shell: bash
+      run: |
+        if [ "$ESPHOME_VERSION" == "latest" ]; then
+          ESPHOME_VERSION=$(curl -s https://api.github.com/repos/esphome/esphome/releases/latest | jq -r .name)
+        fi
+        echo name=$ESPHOME_VERSION >> $GITHUB_OUTPUT
+        echo path=~/.esphome-venv-$ESPHOME_VERSION >> $GITHUB_OUTPUT
+
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.platformio/.cache
+        # TODO check that cache key may be added with ${{ github.repository_id}}
+        key: ${{ runner.os }}-esphome-${{ steps.esphome.outputs.name }}-python-${{ inputs.python-version }}
+    # - name: Cache python
+    #   id: cache-python
+    #   uses: actions/cache@v4
+    #   with:
+    #     path: ${{ runner.tool_cache }}
+    #     key: ${{ runner.os }}-python-${{ inputs.python-version }}
+    - name: Setup Python ${{ inputs.python-version }}
+      id: python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+
+    # - name: Cache virtual environment
+    #   id: venv-cache
+    #   uses: actions/cache@v4
+    #   with:
+    #     path: ${{ steps.esphome.outputs.path }}
+    #     key: ${{ runner.os }}-python-${{ steps.python.outputs.python-version }}-esphome-venv-${{ steps.esphome.outputs.name }}
+    - name: Create virtual environment for ESPHome ${{ steps.esphome.outputs.path }}
+      # if: steps.venv-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        ESPHOME_VENV: ${{ steps.esphome.outputs.path }}
+      run: |
+        #python -m venv $ESPHOME_VENV
+        #source $ESPHOME_VENV/bin/activate
+        echo "::group::Installing ESPHome $ESPHOME_VERSION ($(python --version))"
+        pip install --root-user-action=ignore setuptools yq esphome==$ESPHOME_VERSION
+        echo "::endgroup::"
+    - name: Process ESPHome configuration ${{ inputs.config }}
+      id: process
+      shell: bash
+      env:
+        ESPHOME_VENV: ${{ steps.esphome.outputs.path }}
+        ESPHOME_CONFIG: ${{ inputs.config }}
+        ESPHOME_SUBSTITUTIONS: ${{ inputs.substitutions }}
+        ESPHOME_CONFIGURE: ${{ inputs.configure }}
+      run: |
+        #source $ESPHOME_VENV/bin/activate
+        IFS=$'\n'
+        command=$([ "$ESPHOME_CONFIGURE" == "true" ] && echo "config" || echo "compile")
+
+        substitutions=($(echo "$ESPHOME_SUBSTITUTIONS" | jq -r 'to_entries[]|"-s\n\(.key)\n\(.value)"'))
+
+        ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" 2> /dev/null | yq -r .esphome.name)
+
+        echo "::group::Execute $command for project $ESPHOME_PROJECT"
+        esphome "${substitutions[@]}" $command "$ESPHOME_CONFIG"
+        echo "::endgroup::"
+        echo path=.esphome/build/$ESPHOME_PROJECT/.pioenvs/$ESPHOME_PROJECT >> $GITHUB_OUTPUT
