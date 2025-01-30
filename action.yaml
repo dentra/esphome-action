@@ -32,16 +32,15 @@ runs:
         ESPHOME_VERSION: ${{ inputs.version }}
       shell: bash
       run: |
+        # Prepare environment for ESPHome ${{ inputs.version }}
         if [ "$ESPHOME_VERSION" == "latest" ]; then
           ESPHOME_VERSION=$(curl -s https://api.github.com/repos/esphome/esphome/releases/latest | jq -r .name)
         fi
         echo name=$ESPHOME_VERSION >> $GITHUB_OUTPUT
         echo path=~/.esphome-venv-$ESPHOME_VERSION >> $GITHUB_OUTPUT
-
+        # Add requirements.txt if it does not exists 
         if [ ! -f requirements.txt ]; then
-          echo "setuptools" > requirements.txt
-          echo "yq" >> requirements.txt
-          echo "esphome==$ESPHOME_VERSION" >> requirements.txt
+          touch requirements.txt
         fi
 
     - uses: actions/cache@v4
@@ -70,16 +69,17 @@ runs:
     #   with:
     #     path: ${{ steps.esphome.outputs.path }}
     #     key: ${{ runner.os }}-python-${{ steps.python.outputs.python-version }}-esphome-venv-${{ steps.esphome.outputs.name }}
-    - name: Create virtual environment for ESPHome ${{ steps.esphome.outputs.path }}
+    - name: Create environment for ESPHome ${{ steps.esphome.outputs.path }}
       # if: steps.venv-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
         ESPHOME_VENV: ${{ steps.esphome.outputs.path }}
       run: |
+        # Create environment for ESPHome ${{ steps.esphome.outputs.path }}
         #python -m venv $ESPHOME_VENV
         #source $ESPHOME_VENV/bin/activate
         echo "::group::Installing ESPHome $ESPHOME_VERSION ($(python --version))"
-        pip install --root-user-action=ignore setuptools yq esphome==$ESPHOME_VERSION
+        pip install --root-user-action=ignore setuptools jq yq esphome==$ESPHOME_VERSION
         echo "::endgroup::"
     - name: Process ESPHome configuration ${{ inputs.config }}
       id: process
@@ -90,6 +90,7 @@ runs:
         ESPHOME_SUBSTITUTIONS: ${{ inputs.substitutions }}
         ESPHOME_CONFIGURE: ${{ inputs.configure }}
       run: |
+        # Process ESPHome configuration ${{ inputs.config }}
         #source $ESPHOME_VENV/bin/activate
         IFS=$'\n'
         command=$([ "$ESPHOME_CONFIGURE" == "true" ] && echo "config" || echo "compile")
