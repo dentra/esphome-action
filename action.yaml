@@ -38,7 +38,7 @@ runs:
         echo name=$ESPHOME_VERSION >> $GITHUB_OUTPUT
         echo path=~/.esphome-venv-$ESPHOME_VERSION >> $GITHUB_OUTPUT
 
-        if [ -f requirements.txt ]; then
+        if [ ! -f requirements.txt ]; then
           echo "setuptools" > requirements.txt
           echo "yq" >> requirements.txt
           echo "esphome==$ESPHOME_VERSION" >> requirements.txt
