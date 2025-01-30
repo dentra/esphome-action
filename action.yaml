@@ -92,12 +92,17 @@ runs:
       run: |
         # Process ESPHome configuration ${{ inputs.config }}
         #source $ESPHOME_VENV/bin/activate
-        IFS=$'\n'
         command=$([ "$ESPHOME_CONFIGURE" == "true" ] && echo "config" || echo "compile")
-
+        echo "command=$command"
+        IFS=$'\n'
         substitutions=($(echo "$ESPHOME_SUBSTITUTIONS" | jq -r 'to_entries[]|"-s\n\(.key)\n\(.value)"'))
+        echo "substitutions=${substitutions[@]}"
 
-        ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" 2> /dev/null | yq -r .esphome.name)
+        #ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" 2>/dev/null | yq -r .esphome.name)
+        echo "test config"
+        esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" | yq -r .esphome.name
+        ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" | yq -r .esphome.name)
+        echo "ESPHOME_PROJECT=$ESPHOME_PROJECT"
 
         echo "::group::Execute $command for project $ESPHOME_PROJECT"
         esphome "${substitutions[@]}" $command "$ESPHOME_CONFIG"
