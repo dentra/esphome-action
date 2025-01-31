@@ -107,6 +107,9 @@ runs:
           ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" | yq -r .esphome.name)
           echo "ESPHOME_PROJECT=$ESPHOME_PROJECT"
 
+          export PLATFORMIO_DISABLE_PROGRESSBAR=true
+          export PLATFORMIO_NO_ANSI=true
+
           echo "::group::Execute compile for project $ESPHOME_PROJECT"
           esphome "${substitutions[@]}" compile "$ESPHOME_CONFIG"
           echo "::endgroup::"
