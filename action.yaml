@@ -12,8 +12,8 @@ inputs:
     description: ESPHome substitution variables as json object string
     required: false
     default: '{}'
-  configure:
-    description: Run configure when true or compile
+  configure_only:
+    description: Run only configure when true or also compile when false
     required: false
     default: "false"
   python-version:
@@ -21,7 +21,7 @@ inputs:
     required: true
 outputs:
   firmware-path:
-    description: Path where firmware located
+    description: Path where firmware located when configure_only is not set or false
     value: ${{ steps.process.outputs.path }}
 runs:
   using: "composite"
@@ -33,11 +33,14 @@ runs:
       shell: bash
       run: |
         # Prepare environment for ESPHome ${{ inputs.version }}
+        
         if [ "$ESPHOME_VERSION" == "latest" ]; then
           ESPHOME_VERSION=$(curl -s https://api.github.com/repos/esphome/esphome/releases/latest | jq -r .name)
         fi
+        
         echo name=$ESPHOME_VERSION >> $GITHUB_OUTPUT
         echo path=~/.esphome-venv-$ESPHOME_VERSION >> $GITHUB_OUTPUT
+
         # Add requirements.txt if it does not exists 
         if [ ! -f requirements.txt ]; then
           touch requirements.txt
@@ -48,7 +51,6 @@ runs:
         path: |
           ~/.cache/pip
           ~/.platformio/.cache
-        # TODO check that cache key may be added with ${{ github.repository_id}}
         key: ${{ runner.os }}-esphome-${{ steps.esphome.outputs.name }}-python-${{ inputs.python-version }}
     # - name: Cache python
     #   id: cache-python
@@ -92,19 +94,21 @@ runs:
       run: |
         # Process ESPHome configuration ${{ inputs.config }}
         #source $ESPHOME_VENV/bin/activate
-        command=$([ "$ESPHOME_CONFIGURE" == "true" ] && echo "config" || echo "compile")
-        echo "command=$command"
+
         IFS=$'\n'
         substitutions=($(echo "$ESPHOME_SUBSTITUTIONS" | jq -r 'to_entries[]|"-s\n\(.key)\n\(.value)"'))
         echo "substitutions=${substitutions[@]}"
 
-        #ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" 2>/dev/null | yq -r .esphome.name)
-        echo "test config"
-        esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" | yq -r .esphome.name
-        ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" | yq -r .esphome.name)
-        echo "ESPHOME_PROJECT=$ESPHOME_PROJECT"
-
-        echo "::group::Execute $command for project $ESPHOME_PROJECT"
-        esphome "${substitutions[@]}" $command "$ESPHOME_CONFIG"
+        echo "::group::Test configuration"
+        esphome "${substitutions[@]}" config "$ESPHOME_CONFIG"
         echo "::endgroup::"
-        echo path=.esphome/build/$ESPHOME_PROJECT/.pioenvs/$ESPHOME_PROJECT >> $GITHUB_OUTPUT
+
+        if [ "$ESPHOME_CONFIGURE" != "true" ]; then
+          ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" | yq -r .esphome.name)
+          echo "ESPHOME_PROJECT=$ESPHOME_PROJECT"
+
+          echo "::group::Execute compile for project $ESPHOME_PROJECT"
+          esphome "${substitutions[@]}" compile "$ESPHOME_CONFIG"
+          echo "::endgroup::"
+          echo path=.esphome/build/$ESPHOME_PROJECT/.pioenvs/$ESPHOME_PROJECT >> $GITHUB_OUTPUT
+        fi
