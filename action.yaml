@@ -51,6 +51,7 @@ runs:
         path: |
           ~/.cache/pip
           ~/.platformio/.cache
+          ~/.cache/esphome
         key: ${{ runner.os }}-esphome-${{ steps.esphome.outputs.name }}-python-${{ inputs.python-version }}
     # - name: Cache python
     #   id: cache-python
@@ -90,7 +91,7 @@ runs:
         ESPHOME_VENV: ${{ steps.esphome.outputs.path }}
         ESPHOME_CONFIG: ${{ inputs.config }}
         ESPHOME_SUBSTITUTIONS: ${{ inputs.substitutions }}
-        ESPHOME_CONFIGURE: ${{ inputs.configure }}
+        ESPHOME_CONFIGURE: ${{ inputs.configure_only }}
       run: |
         # Process ESPHome configuration ${{ inputs.config }}
         #source $ESPHOME_VENV/bin/activate
@@ -100,11 +101,12 @@ runs:
         echo "substitutions=${substitutions[@]}"
 
         echo "::group::Test configuration"
-        esphome "${substitutions[@]}" config "$ESPHOME_CONFIG"
+        ESPHOME_CONFIG_OUTPUT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG")
+        echo "$ESPHOME_CONFIG_OUTPUT"
         echo "::endgroup::"
 
         if [ "$ESPHOME_CONFIGURE" != "true" ]; then
-          ESPHOME_PROJECT=$(esphome "${substitutions[@]}" config "$ESPHOME_CONFIG" | yq -r .esphome.name)
+          ESPHOME_PROJECT=$(echo "$ESPHOME_CONFIG_OUTPUT" | yq -r .esphome.name)
           echo "ESPHOME_PROJECT=$ESPHOME_PROJECT"
 
           export PLATFORMIO_DISABLE_PROGRESSBAR=true
@@ -113,5 +115,19 @@ runs:
           echo "::group::Execute compile for project $ESPHOME_PROJECT"
           esphome "${substitutions[@]}" compile "$ESPHOME_CONFIG"
           echo "::endgroup::"
-          echo path=.esphome/build/$ESPHOME_PROJECT/.pioenvs/$ESPHOME_PROJECT >> $GITHUB_OUTPUT
+
+          # ESPHome data directory is next to config unless overridden
+          ESPHOME_DATA="${ESPHOME_DATA_DIR:-$(dirname "$ESPHOME_CONFIG")/.esphome}"
+          # PlatformIO builds
+          FIRMWARE_PATH="$ESPHOME_DATA/build/$ESPHOME_PROJECT/.pioenvs/$ESPHOME_PROJECT"
+          if [ ! -d "$FIRMWARE_PATH" ]; then
+            # native ESP-IDF builds
+            FIRMWARE_PATH="$ESPHOME_DATA/build/$ESPHOME_PROJECT/build"
+          fi
+          if ! compgen -G "$FIRMWARE_PATH/firmware.*" > /dev/null; then
+            echo "::error::Firmware not found in $FIRMWARE_PATH"
+            exit 1
+          fi
+          echo "FIRMWARE_PATH=$FIRMWARE_PATH"
+          echo path=$FIRMWARE_PATH >> $GITHUB_OUTPUT
         fi
