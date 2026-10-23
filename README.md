@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Generate fake secrets.yaml
         run: |
           touch secrets.yaml
@@ -24,7 +24,7 @@ jobs:
           echo "wifi_password: '12345678'" >> secrets.yaml
           echo "wifi_ap_password: '12345678'" >> secrets.yaml
       - name: Build project
-        uses: dentra/esphome-action@main
+        uses: dentra/esphome-action@v2
         id: esphome
         with:
           version: ${{ env.ESPHOME_VERSION }}

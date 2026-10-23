@@ -46,29 +46,28 @@ runs:
           touch requirements.txt
         fi
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       with:
         path: |
           ~/.cache/pip
-          ~/.platformio/.cache
           ~/.cache/esphome
         key: ${{ runner.os }}-esphome-${{ steps.esphome.outputs.name }}-python-${{ inputs.python-version }}
     # - name: Cache python
     #   id: cache-python
-    #   uses: actions/cache@v4
+    #   uses: actions/cache@v6
     #   with:
     #     path: ${{ runner.tool_cache }}
     #     key: ${{ runner.os }}-python-${{ inputs.python-version }}
     - name: Setup Python ${{ inputs.python-version }}
       id: python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
 
     # - name: Cache virtual environment
     #   id: venv-cache
-    #   uses: actions/cache@v4
+    #   uses: actions/cache@v6
     #   with:
     #     path: ${{ steps.esphome.outputs.path }}
     #     key: ${{ runner.os }}-python-${{ steps.python.outputs.python-version }}-esphome-venv-${{ steps.esphome.outputs.name }}
